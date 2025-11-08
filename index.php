@@ -155,37 +155,42 @@
         });
 
         // Upload file function
-        function uploadFile(file) {
-            const formData = new FormData();
-            formData.append('video', file);
-            formData.append('action', 'upload');
+        // Upload file function
+function uploadFile(file) {
+    const formData = new FormData();
+    formData.append('video', file);
+    formData.append('action', 'upload');
 
-            $.ajax({
-                url: 'run.php',
-                method: 'POST',
-                data: formData,
-                processData: false,
-                contentType: false,
-                success: function(response) {
-                    console.log('Upload response:', response);
-                    if (response.status === 'uploaded') {
-                        $('#output').html('✅ ' + response.message);
-                        // Start processing setelah upload berhasil
-                        startProcessing(response.filename);
-                    } else {
-                        $('#output').html('❌ ' + response.message);
-                        isProcessing = false;
-                        updateButtonStates(false);
-                    }
-                },
-                error: function(xhr, status, error) {
-                    console.error('Upload error:', error);
-                    $('#output').html('❌ Upload error: ' + error);
-                    isProcessing = false;
-                    updateButtonStates(false);
-                }
-            });
+    $.ajax({
+        url: 'run.php',
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        dataType: 'json', // ← INI YANG PENTING! jQuery akan auto parse JSON
+        success: function(data) { // ← 'data' sudah berupa Object, bukan string
+            console.log('Upload response:', data);
+
+            // LANGSUNG GUNAKAN data (tidak perlu JSON.parse)
+            if (data.status === 'uploaded') {
+                $('#output').html('✅ ' + data.message);
+                // Start processing setelah upload berhasil
+                startProcessing(data.filename);
+            } else {
+                $('#output').html('❌ ' + data.message);
+                isProcessing = false;
+                updateButtonStates(false);
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Upload error:', error);
+            console.log('XHR response:', xhr.responseText);
+            $('#output').html('❌ Upload error: ' + error + '<br>Response: ' + xhr.responseText);
+            isProcessing = false;
+            updateButtonStates(false);
         }
+    });
+}
 
         // Start processing setelah upload
         function startProcessing(filename) {

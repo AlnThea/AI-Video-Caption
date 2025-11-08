@@ -6,26 +6,26 @@ function isWindows() {
     return strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
 }
 
-// Juga update startBackgroundProcess() untuk terima parameter
 function startBackgroundProcess($filename = null) {
     $logFile = 'process.log';
 
     // Reset log file
     if ($filename) {
         file_put_contents($logFile, "🚀 Memulai proses untuk file: $filename - " . date('Y-m-d H:i:s') . "\n");
+        // SIMPAN FILENAME KE FILE dengan format yang jelas
+        file_put_contents('current_filename.txt', $filename);
+        file_put_contents($logFile, "✅ Filename disimpan: $filename\n", FILE_APPEND);
     } else {
         file_put_contents($logFile, "🚀 Memulai proses background... " . date('Y-m-d H:i:s') . "\n");
     }
 
     if (isWindows()) {
-        // Windows background process - pass filename sebagai argument
-        $filenameParam = $filename ? " \"$filename\"" : "";
-        $cmd = 'start /B php-cgi -f background_processor.php' . $filenameParam . ' > nul 2>&1';
+        // Windows background process
+        $cmd = 'start /B php-cgi -f background_processor.php > nul 2>&1';
         pclose(popen($cmd, 'r'));
     } else {
         // Linux background process
-        $filenameParam = $filename ? " \"$filename\"" : "";
-        $cmd = 'php background_processor.php' . $filenameParam . ' > /dev/null 2>&1 &';
+        $cmd = 'php background_processor.php > /dev/null 2>&1 &';
         shell_exec($cmd);
     }
 
@@ -34,13 +34,19 @@ function startBackgroundProcess($filename = null) {
 }
 
 function extractAudio($filename = null) {
-    // Jika tidak ada filename, gunakan default atau dari session
+    // HARUS ada filename
     if ($filename === null) {
-        $filename = $_SESSION['current_video'] ?? '0512.mp4';
+        $filename = $_SESSION['current_video'] ?? '';
+        if (empty($filename)) {
+            file_put_contents('process.log', "❌ ERROR: Tidak ada filename yang provided\n");
+            return false;
+        }
     }
 
-    // Hanya start background process dan langsung return
-    return startBackgroundProcess();
+    // SIMPAN KE SESSION juga untuk backup
+    $_SESSION['current_video'] = $filename;
+
+    return startBackgroundProcess($filename);
 }
 
 function getProcessStatus() {
@@ -50,20 +56,30 @@ function getProcessStatus() {
 
     if (file_exists($errorFile)) {
         $error = file_get_contents($errorFile);
-        unlink($errorFile);
+        @unlink($errorFile);
         return ['status' => 'error', 'message' => $error];
     }
 
     if (file_exists($doneFile)) {
-        unlink($doneFile);
+        @unlink($doneFile);
         return ['status' => 'completed', 'message' => 'Proses selesai'];
     }
 
     if (file_exists($logFile)) {
         $logContent = file_get_contents($logFile);
-        if (strpos($logContent, '✅ PROSES SELESAI') !== false) {
+
+        // Cek berbagai indikator selesai
+        if (strpos($logContent, '🎉 PROSES SELESAI') !== false ||
+            strpos($logContent, '✅ PROSES SELESAI') !== false ||
+            strpos($logContent, '✅ Video berhasil: output/') !== false) {
             return ['status' => 'completed', 'message' => 'Proses selesai'];
         }
+
+        // Cek jika ada error dalam log
+        if (strpos($logContent, '❌ ERROR') !== false) {
+            return ['status' => 'error', 'message' => 'Error dalam proses - lihat log untuk detail'];
+        }
+
         return ['status' => 'processing', 'message' => 'Sedang diproses', 'log' => $logContent];
     }
 
