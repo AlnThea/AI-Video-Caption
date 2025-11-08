@@ -66,44 +66,6 @@
         let interval;
         let isProcessing = false;
 
-        $('#start-btn').click(function() {
-            if (!isProcessing) {
-                isProcessing = true;
-                $(this).prop('disabled', true);
-                $('#output').html('🔄 Memulai proses...');
-
-                $.ajax({
-                    url: 'run.php',
-                    method: 'POST',
-                    data: { action: 'start' },
-                    success: function(response) {
-                        if (response === 'started') {
-                            interval = setInterval(checkProgress, 1000);
-                        } else {
-                            $('#output').html('❌ Error: ' + response);
-                            isProcessing = false;
-                            $('#start-btn').prop('disabled', false);
-                        }
-                    }
-                });
-            }
-        });
-
-        $('#stop-btn').click(function() {
-            if (isProcessing) {
-                $.ajax({
-                    url: 'run.php',
-                    method: 'POST',
-                    data: { action: 'stop' },
-                    success: function() {
-                        isProcessing = false;
-                        updateButtonStates(false); // Non-aktifkan Stop, aktifkan Start
-                        $('#output').append('\n⏹ Proses dihentikan!');
-                    }
-                });
-            }
-        });
-
         // Fungsi untuk update tombol
         function updateButtonStates(processing) {
             if (processing) {
@@ -115,47 +77,116 @@
             }
         }
 
-    // Fungsi checkProgress (modifikasi bagian completed)
-        function checkProgress() {
-            $.ajax({
-                url: 'progress.php',
-                success: function(data) {
-                    try {
-                        let progressData = JSON.parse(data);
-                        $('#progress-bar').css('width', progressData.progress + '%')
-                            .text(progressData.progress + '%');
-                        $('#output').html(progressData.log);
+        $('#start-btn').click(function() {
+            if (!isProcessing) {
+                isProcessing = true;
+                updateButtonStates(true);
+                $('#output').html('🔄 Memulai proses...');
 
-                        if (progressData.completed) {
-                            clearInterval(interval);
+                $.ajax({
+                    url: 'run.php',
+                    method: 'POST',
+                    data: { action: 'start' },
+                    dataType: 'json', // Tambahkan ini
+                    success: function(response) {
+                        console.log('Start response:', response);
+                        if (response.status === 'started') {
+                            $('#output').html('✅ ' + response.message);
+                            interval = setInterval(checkProgress, 2000); // Check setiap 2 detik
+                        } else {
+                            $('#output').html('❌ ' + response.message);
                             isProcessing = false;
                             updateButtonStates(false);
-                            $('#output').append('\n✅ Semua proses selesai!');
-
-                            // Tampilkan video hasil
-                            $('#video-preview').html(`
-                        <video controls width="100%">
-                            <source src="output/merged.mp4" type="video/mp4">
-                        </video>
-                    `);
                         }
-                    } catch (e) {
-                        console.error("Error parsing JSON:", e, "Response:", data);
-                        $('#output').html('Error: ' + data);
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Start error:', error);
+                        $('#output').html('❌ AJAX Error: ' + error);
+                        isProcessing = false;
+                        updateButtonStates(false);
+                    }
+                });
+            }
+        });
+
+        $('#stop-btn').click(function() {
+            if (isProcessing) {
+                $.ajax({
+                    url: 'run.php',
+                    method: 'POST',
+                    data: { action: 'stop' },
+                    dataType: 'json',
+                    success: function(response) {
+                        console.log('Stop response:', response);
+                        clearInterval(interval);
+                        isProcessing = false;
+                        updateButtonStates(false);
+                        $('#output').append('\n⏹ ' + response.message);
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Stop error:', error);
+                        $('#output').html('❌ AJAX Error: ' + error);
+                    }
+                });
+            }
+        });
+
+        // Fungsi checkProgress yang baru
+        function checkProgress() {
+            $.ajax({
+                url: 'run.php',
+                method: 'POST',
+                data: { action: 'status' },
+                dataType: 'json',
+                success: function(response) {
+                    console.log('Status response:', response);
+
+                    // Update progress bar berdasarkan status
+                    if (response.status === 'processing') {
+                        $('#progress-bar').css('width', '70%').text('70%');
+                        $('#output').html(response.log || '🔄 Sedang memproses...');
+                    } else if (response.status === 'completed') {
+                        $('#progress-bar').css('width', '100%').text('100%');
+                        $('#output').html('✅ ' + response.message);
+                        clearInterval(interval);
+                        isProcessing = false;
+                        updateButtonStates(false);
+
+                        // Tampilkan video hasil jika ada
+                        if (fileExists('output/merged.mp4')) {
+                            $('#output').append('\n\n🎥 Video hasil:');
+                            $('#output').append(`
+                                <br><video controls width="100%">
+                                    <source src="output/merged.mp4" type="video/mp4">
+                                    Browser Anda tidak mendukung tag video.
+                                </video>
+                            `);
+                        }
+                    } else if (response.status === 'error') {
+                        $('#output').html('❌ ' + response.message);
+                        clearInterval(interval);
+                        isProcessing = false;
+                        updateButtonStates(false);
+                    } else {
+                        $('#progress-bar').css('width', '30%').text('30%');
+                        $('#output').html(response.message);
                     }
                 },
                 error: function(xhr, status, error) {
-                    console.error("AJAX Error:", status, error);
-                    $('#output').html('AJAX Error: ' + status);
+                    console.error('Status error:', error);
+                    $('#output').html('❌ Error checking status: ' + error);
                 }
             });
         }
 
-        updateButtonStates(false); // Pastikan Stop disabled saat pertama load
+        // Fungsi untuk cek file exists (simulasi)
+        function fileExists(url) {
+            // Ini hanya simulasi, di real case butuh AJAX check
+            return true; // Asumsikan file ada
+        }
 
-
-
-
+        // Inisialisasi
+        updateButtonStates(false);
     });
 </script>
 </body>
