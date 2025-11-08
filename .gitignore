@@ -1,2 +1,17 @@
-/node_modules
-/vosk-model
+# Log files
+*.log
+/process.log
+/process_done
+/process_error
+
+# Dependencies
+/node_modules/
+/vosk-model/
+
+# Environment
+.env
+.env.*
+
+# System
+.DS_Store
+Thumbs.db
