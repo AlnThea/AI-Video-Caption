@@ -6,19 +6,26 @@ function isWindows() {
     return strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
 }
 
-function startBackgroundProcess() {
+// Juga update startBackgroundProcess() untuk terima parameter
+function startBackgroundProcess($filename = null) {
     $logFile = 'process.log';
 
     // Reset log file
-    file_put_contents($logFile, "🚀 Memulai proses background... " . date('Y-m-d H:i:s') . "\n");
+    if ($filename) {
+        file_put_contents($logFile, "🚀 Memulai proses untuk file: $filename - " . date('Y-m-d H:i:s') . "\n");
+    } else {
+        file_put_contents($logFile, "🚀 Memulai proses background... " . date('Y-m-d H:i:s') . "\n");
+    }
 
     if (isWindows()) {
-        // Windows background process
-        $cmd = 'start /B php-cgi -f background_processor.php > nul 2>&1';
+        // Windows background process - pass filename sebagai argument
+        $filenameParam = $filename ? " \"$filename\"" : "";
+        $cmd = 'start /B php-cgi -f background_processor.php' . $filenameParam . ' > nul 2>&1';
         pclose(popen($cmd, 'r'));
     } else {
         // Linux background process
-        $cmd = 'php background_processor.php > /dev/null 2>&1 &';
+        $filenameParam = $filename ? " \"$filename\"" : "";
+        $cmd = 'php background_processor.php' . $filenameParam . ' > /dev/null 2>&1 &';
         shell_exec($cmd);
     }
 
@@ -26,7 +33,12 @@ function startBackgroundProcess() {
     return true;
 }
 
-function extractAudio() {
+function extractAudio($filename = null) {
+    // Jika tidak ada filename, gunakan default atau dari session
+    if ($filename === null) {
+        $filename = $_SESSION['current_video'] ?? '0512.mp4';
+    }
+
     // Hanya start background process dan langsung return
     return startBackgroundProcess();
 }

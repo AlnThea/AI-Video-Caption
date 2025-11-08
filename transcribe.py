@@ -6,8 +6,17 @@ import random
 from vosk import Model, KaldiRecognizer
 import sys
 
-# CONFIGURATION - WINDOWS COMPATIBLE
-AUDIO_FILE = os.path.join("audio", "0512.wav")
+# CONFIGURATION - DYNAMIC FILENAME
+# Ambil filename dari argument jika ada
+if len(sys.argv) > 1:
+    input_filename = sys.argv[1]
+    AUDIO_FILE = os.path.join("audio", os.path.splitext(input_filename)[0] + ".wav")
+    INPUT_VIDEO = os.path.join("upload", input_filename)
+else:
+    # Fallback ke default
+    AUDIO_FILE = os.path.join("audio", "0512.wav")
+    INPUT_VIDEO = "upload/0512.mp4"
+
 MODEL_DIR = os.path.join("vosk-model", "vosk-model-en-us-0.22")
 OUTPUT_ASS = os.path.join("subtitles", "output.ass")
 
@@ -121,14 +130,17 @@ Format: Layer, Start, End, Style, Text
 def main():
     """Main function dengan error handling"""
     try:
+        safe_print(f"[INFO] Processing video file: {INPUT_VIDEO}")
+        safe_print(f"[INFO] Output audio file: {AUDIO_FILE}")
+
         # 1. Check dependencies
         if not os.path.exists(FFMPEG_PATH):
             safe_print("[ERROR] FFmpeg tidak ditemukan di: " + FFMPEG_PATH)
             return False
 
         # 2. Check input video
-        if not os.path.exists("upload/0512.mp4"):
-            safe_print("[ERROR] File video tidak ditemukan: upload/0512.mp4")
+        if not os.path.exists(INPUT_VIDEO):
+            safe_print("[ERROR] File video tidak ditemukan: " + INPUT_VIDEO)
             return False
 
         # 3. Check model VOSK
@@ -146,7 +158,7 @@ def main():
 
             result = subprocess.run([
                 FFMPEG_PATH,
-                "-y", "-i", "upload/0512.mp4",
+                "-y", "-i", INPUT_VIDEO,
                 "-vn", "-ar", "16000", "-ac", "1",
                 "-f", "wav", AUDIO_FILE
             ], capture_output=True, text=True, timeout=300)
