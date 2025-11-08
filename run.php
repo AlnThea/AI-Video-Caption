@@ -1,5 +1,5 @@
 <?php
-// run.php - UPDATE UNTUK SUPPORT FILE UPLOAD
+// run.php - PASTIKAN JSON RESPONSE VALID
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -8,9 +8,14 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// Function untuk send JSON response
+function sendJsonResponse($data) {
     header('Content-Type: application/json');
+    echo json_encode($data);
+    exit;
+}
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $action = $_POST['action'] ?? '';
 
@@ -22,17 +27,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     mkdir($uploadDir, 0777, true);
                 }
 
-                // Generate unique filename
+                // PERTAHANKAN NAMA FILE ASLI (dengan sanitize)
                 $originalName = $_FILES['video']['name'];
-                $fileExtension = pathinfo($originalName, PATHINFO_EXTENSION);
-                $filename = uniqid() . '_' . time() . '.' . $fileExtension;
-                $filepath = $uploadDir . $filename;
+                $sanitizedName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName); // Sanitize nama file
+                $filepath = $uploadDir . $sanitizedName;
+
+                // Cek jika file sudah ada, tambah timestamp
+                if (file_exists($filepath)) {
+                    $fileInfo = pathinfo($sanitizedName);
+                    $filename = $fileInfo['filename'] . '_' . time() . '.' . $fileInfo['extension'];
+                    $filepath = $uploadDir . $filename;
+                } else {
+                    $filename = $sanitizedName;
+                }
 
                 // Move uploaded file
                 if (move_uploaded_file($_FILES['video']['tmp_name'], $filepath)) {
                     // Store filename in session untuk diproses
                     $_SESSION['current_video'] = $filename;
-                    echo json_encode([
+                    $_SESSION['original_filename'] = $filename;
+
+                    sendJsonResponse([
                         'status' => 'uploaded',
                         'message' => 'File berhasil diupload: ' . $originalName,
                         'filename' => $filename
@@ -41,7 +56,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new Exception('Gagal menyimpan file');
                 }
             } else {
-                throw new Exception('Tidak ada file yang diupload atau error upload');
+                $errorMsg = 'Tidak ada file yang diupload atau error upload';
+                if (isset($_FILES['video'])) {
+                    $errorMsg .= ' (Error code: ' . $_FILES['video']['error'] . ')';
+                }
+                throw new Exception($errorMsg);
             }
 
         } elseif ($action === 'start') {
@@ -61,43 +80,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             @unlink('process_error');
 
             if (extractAudio($filename)) {
-                echo json_encode([
+                sendJsonResponse([
                     'status' => 'started',
                     'message' => 'Proses dimulai untuk file: ' . $filename
                 ]);
             } else {
                 unset($_SESSION['processing']);
-                echo json_encode(['status' => 'error', 'message' => 'Gagal memulai proses']);
+                sendJsonResponse(['status' => 'error', 'message' => 'Gagal memulai proses']);
             }
 
         } elseif ($action === 'stop') {
             if (stopProcess()) {
                 session_unset();
                 session_destroy();
-                echo json_encode(['status' => 'stopped', 'message' => 'Proses dihentikan']);
+                sendJsonResponse(['status' => 'stopped', 'message' => 'Proses dihentikan']);
             } else {
-                echo json_encode(['status' => 'error', 'message' => 'Gagal menghentikan proses']);
+                sendJsonResponse(['status' => 'error', 'message' => 'Gagal menghentikan proses']);
             }
 
         } elseif ($action === 'status') {
             $status = getProcessStatus();
-            echo json_encode($status);
+            sendJsonResponse($status);
 
         } elseif ($action === 'get_video') {
-            // Return URL video hasil
-            if (file_exists('output/merged.mp4')) {
-                echo json_encode(['video_url' => 'output/merged.mp4?t=' . time()]);
+            // Return URL video hasil berdasarkan nama file asli
+            $currentVideo = $_SESSION['current_video'] ?? '';
+            if (!empty($currentVideo)) {
+                $baseName = pathinfo($currentVideo, PATHINFO_FILENAME);
+                $outputVideo = 'output/' . $baseName . '_with_subtitle.mp4';
+                if (file_exists($outputVideo)) {
+                    sendJsonResponse(['video_url' => $outputVideo . '?t=' . time()]);
+                } else {
+                    sendJsonResponse(['video_url' => null]);
+                }
             } else {
-                echo json_encode(['video_url' => null]);
+                sendJsonResponse(['video_url' => null]);
             }
 
         } else {
-            echo json_encode(['status' => 'error', 'message' => 'Action tidak dikenali: ' . $action]);
+            sendJsonResponse(['status' => 'error', 'message' => 'Action tidak dikenali: ' . $action]);
         }
     } catch (Exception $e) {
-        echo json_encode(['status' => 'error', 'message' => 'Exception: ' . $e->getMessage()]);
+        sendJsonResponse(['status' => 'error', 'message' => 'Exception: ' . $e->getMessage()]);
     }
 } else {
-    echo json_encode(['status' => 'error', 'message' => 'Method tidak diizinkan']);
+    sendJsonResponse(['status' => 'error', 'message' => 'Method tidak diizinkan']);
 }
 ?>
